@@ -33,7 +33,7 @@ import numpy as np
 
 #for i in range(2):
 
-for i in range(1,2):
+for i in range(1,23):
     print i
     fobj = Reader.FullReader('./ANSYS files/Sector%s.full' %i)
     fobj.LoadFullKM()
@@ -74,7 +74,7 @@ for i in range(1,2):
     
     mspmat=np.delete(mspmat, (cdof), axis=1)
     
-    uconst_dof=np.delete(fobj.nref, (cdof))     #do I need this?
+    #uconst_dof=np.delete(fobj.nref, (cdof))     #do I need this?
             
     fobj.nref=np.delete(fobj.nref, (cdof))      #remove cdof so the mdof are ID'd
                                                 #correctly
@@ -148,8 +148,8 @@ for i in range(1,2):
     
     ##Error Check
     ##Check to see if the partitioned matrix still gives the eigvals of non partitioned
-    vals, vecs = eigsh(Kp, 4, Mp, sigma=0, which='LM', tol=1E-1)
-    print np.sqrt(vals)/(2*np.pi)
+    #vals, vecs = eigsh(Kp, 4, Mp, sigma=0, which='LM', tol=1E-1)
+    #print np.sqrt(vals)/(2*np.pi)
     
     
     #==============================================================================
@@ -170,7 +170,7 @@ for i in range(1,2):
     Kpbb = Kpbb[:,bbdofp]
     
     # Partition out ib
-    
+    2
     Kpib = Kp[iidofp,:]
     Kpib = Kpib[:,bbdofp]
     
@@ -203,9 +203,9 @@ for i in range(1,2):
     #===================================== =========================================
     # Calculate Constrained Normal Modes Perform Eigensolution
     #==============================================================================
-    eignum = 4
+    eignum = 10
     
-    vals, phiN = eigsh(Kpii, eignum, Mpii, sigma=0, which='LM', tol=1E-1)
+    vals, phiN = eigsh(Kpii, eignum, Mpii, sigma=0, which='LM', tol=1E-2)
     
     print np.sqrt(vals)/(2*np.pi)
     
@@ -240,7 +240,7 @@ for i in range(1,2):
     
     """
     if i == 1:
-        nmodes = 4
+        nmodes = eignum
         nsubtotal=22
         totcbdof = nsubtotal*(nmodes+mdof.size/2)    
         Kcb = np.zeros((totcbdof,totcbdof))
@@ -249,9 +249,10 @@ for i in range(1,2):
         Kbb=np.zeros((22*mdof.size/2,22*mdof.size/2))
         Mbb=np.zeros((22*mdof.size/2,22*mdof.size/2))
     
+    # set up nref for Kbb    
     nsub=i    
     
-    kbbcbnref = partnref[bbdofp]
+    kbbcbnref = partnref[bbdofp]    
     
     duplidof = np.where(np.in1d(kbbcbnref, Kbbnref))[0]
     
@@ -264,18 +265,47 @@ for i in range(1,2):
     subdof = np.where(np.in1d(Kbbnref,kbbcbnref))[0]
     
     x, y = np.meshgrid(subdof,subdof)
-    
+          
     Kbb[x, y] = Kbb[x, y] + kbbcb
-    
-    
+        
+        
     Mbb[x, y] = Mbb[x, y] + mbbcb
         
-
+    
     Mibrowstart = (nsub-1)*nmodes
     Mibrowend = (nsub-1)*nmodes+nmodes
     
-    Mibcolstart = nsubtotal*nmodes+((nsub-1)*mibcb.shape[1])
-    Mibcolend = Mibcolstart+mibcb.shape[1]
+    x, y = np.meshgrid(range(Mibrowstart,Mibrowend),subdof)
+    
+    y = (nmodes*nsubtotal) + y
+    
+    Mcb[x.T, y.T ] = mibcb
+
+    Mcb[y, x ] = mibcb.T
+    
+   
+    # for block diagonals
+    
+    KMiirowstart = (nsub-1)*nmodes
+    KMiirowend = (nsub-1)*nmodes+nmodes
+
+    KMiicolstart = (nsub-1)*nmodes
+    KMiicolend = (nsub-1)*nmodes+nmodes
+    
+    Kcb[range(KMiirowstart,KMiirowend), range(KMiicolstart,KMiicolend)]=vals
+    
+    Mcb[range(KMiirowstart,KMiirowend), range(KMiicolstart,KMiicolend)]=1.0
+
+
+    
+"""
+    Mibrowstart = (nsub-1)*nmodes
+    Mibrowend = (nsub-1)*nmodes+nmodes
+    
+    Mibcolstart = nsubtotal*nmodes+((nsub-1)*(mibcb.shape[1]/2))  # this is hard coded for this f112, will have to make another approach to make process general
+    Mibcolend = Mibcolstart+ mibcb.shape[1]
+    if nsub == 22:
+        Mibcolend=Mibcolend-mibcb.shape[1]/2
         
     KMiirowstart = (nsub-1)*nmodes
     KMiirowend = (nsub-1)*nmodes+nmodes
@@ -307,6 +337,8 @@ for i in range(1,2):
     x, y =np.meshgrid(range(Mibcolstart,Mibcolend) ,range(Mibrowstart,Mibrowend))
 
     Mcb[x, y] = mibcb
+    """
+    # end of substructure/blade loop
     
 x, y =np.meshgrid(range(nmodes*nsubtotal,totcbdof), range(nmodes*nsubtotal,totcbdof))    
     
@@ -314,8 +346,25 @@ Kcb[x,y]=Kbb
 
 Mcb[x,y]=Mbb
 
-del Kbb, Mbb
+#del Kbb, Mbb
+del Kpii, Mpii
+del Kpib, Kpbi, Kpbb
+del x, y
+del mbbcb, mbicb
+del kbbcb
+del Mpbb, Mpbi, Mpib
 
+
+#===================================== =========================================
+# Calculate Constrained Normal Modes Perform Eigensolution
+#==============================================================================
+eignum =6
+    
+vals, phiN = eigsh(Kcb, eignum, Mcb, sigma=0, which='LM', tol=1E-3)
+    
+print np.sqrt(vals)/(2*np.pi)
+
+#
 
 """
 
@@ -326,5 +375,18 @@ del Kbb, Mbb
 438 * 22 is kbbsize =9636
 
 How big is Mib, which is aligned with  mbb, only 876 x nnnmodes
+
+
+cdof
+
+fobj.nref[cdof]
+
+nnmaster1
+
+kbbcbnref
+
+
+
+
 """
 
